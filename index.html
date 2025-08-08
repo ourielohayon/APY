@@ -26,6 +26,7 @@
       .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
       button { padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,.08); background: #c6ffd8; cursor: pointer; font-weight: 800; }
       code { background: #ecfff1; padding: 2px 6px; border-radius: 6px; }
+      .err { color:#8b0000; font-size:13px; margin-top:6px;}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
   </head>
@@ -51,11 +52,11 @@
         <section class="card">
           <div class="hdr"><div class="ttl">Morpho Seamless USDC Vault (Base)</div><span class="badge">MORPHO</span></div>
           <div class="row">
-            <div class="box"><div class="label">Vault APY (net)</div><div id="m_apy" class="val">—</div></div>
+            <div class="box"><div class="label">Vault APY (net)</div><div id="m_apy" class="val">—</div><div id="m_err" class="err"></div></div>
             <div class="box"><div class="label">Source</div><div id="m_source" class="val" style="font-size:18px;">—</div><div class="hint">Matches website via Vercel function.</div></div>
           </div>
           <div class="foot"><button id="m_refresh">Refresh Morpho</button><span class="last">Updated: <span id="m_updated">—</span></span></div>
-          <div class="hint">Vault: <code>0x616a4E1db48e22028f6bbf20444Cd3b8e3273738</code></div>
+          <div class="hint">Vault: <code id="vault">0x616a4E1db48e22028f6bbf20444Cd3b8e3273738</code></div>
         </section>
       </div>
     </div>
@@ -92,19 +93,22 @@
       document.getElementById("c_refresh").addEventListener("click", loadCompound);
 
       // ===== Morpho via Vercel API (same origin) =====
-      const MORPHO_VAULT = "0x616a4E1db48e22028f6bbf20444Cd3b8e3273738";
+      const MORPHO_VAULT = document.getElementById("vault").textContent.trim().toLowerCase();
       async function loadMorpho() {
+        const errEl = document.getElementById("m_err");
+        errEl.textContent = "";
         try {
-          const res = await fetch(`/api/morpho?vault=${MORPHO_VAULT}`);
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const data = await res.json();
+          const res = await fetch(`/api/morpho?vault=${encodeURIComponent(MORPHO_VAULT)}`);
+          const txt = await res.text();
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${txt}`);
+          const data = JSON.parse(txt);
           let apy = null;
           if (data.netApy != null) apy = Number(data.netApy);
           else if (data.apy != null) apy = Number(data.apy);
           else if (data.currentApy != null) apy = Number(data.currentApy);
           else if (data.netApyBps != null) apy = Number(data.netApyBps) / 10000;
           else if (data.apyBps != null) apy = Number(data.apyBps) / 10000;
-          if (apy == null || !isFinite(apy)) throw new Error("No APY in payload");
+          if (apy == null || !isFinite(apy)) throw new Error("No APY field in payload: " + JSON.stringify(data).slice(0,400));
           document.getElementById("m_apy").textContent = (apy * 100).toFixed(3) + "%";
           document.getElementById("m_source").textContent = "Morpho API via Vercel";
           document.getElementById("m_updated").textContent = new Date().toLocaleString();
@@ -112,6 +116,7 @@
           console.error("Morpho fetch error:", e);
           document.getElementById("m_apy").textContent = "Error";
           document.getElementById("m_source").textContent = "—";
+          errEl.textContent = String(e).slice(0, 300);
         }
       }
       document.getElementById("m_refresh").addEventListener("click", loadMorpho);
